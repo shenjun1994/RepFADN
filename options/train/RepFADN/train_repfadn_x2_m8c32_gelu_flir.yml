@@ -1,0 +1,125 @@
+# general settings
+name: RepFADN_x2_m1c8_gelu_FLIR_300k
+model_type: SRModel
+scale: 2
+num_gpu: 1  # set num_gpu: 0 for cpu mode
+manual_seed: 10
+
+# dataset and data loader settings
+datasets:
+  train:
+    name: FLIR
+    type: PairedImageDataset
+    dataroot_gt: /datasets/ThermalSR/FLIR_ADAS/FLIR_ADAS_v2/images_thermal_train/data
+    dataroot_lq: /datasets/ThermalSR/FLIR_ADAS/FLIR_ADAS_v2/images_thermal_train/data_lr_noise_x2
+    # (for lmdb)
+    # dataroot_gt: datasets/DIV2K/DIV2K_train_HR_sub.lmdb
+    # dataroot_lq: datasets/DIV2K/DIV2K_train_LR_bicubic_X4_sub.lmdb
+    filename_tmpl: '{}'
+    io_backend:
+      type: disk
+      # (for lmdb)
+      # type: lmdb
+
+    gt_size: 192
+    use_hflip: true
+    use_rot: true
+
+    # data loader
+    num_worker_per_gpu: 6
+    batch_size_per_gpu: 16
+    dataset_enlarge_ratio: 100
+    prefetch_mode: ~
+
+  val:
+    name: FLIR
+    type: PairedImageDataset
+    dataroot_gt: /media/fotric/big/shenjun/datasets/ThermalSR/FLIR_ADAS/FLIR_ADAS_v2/images_thermal_val/data
+    dataroot_lq: /media/fotric/big/shenjun/datasets/ThermalSR/FLIR_ADAS/FLIR_ADAS_v2/images_thermal_val/data_lr_noise_x2
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: RepFADN
+  up_scale: 2
+  img_channels: 3
+  feature_channels: 32
+  depth_multiplier: 2
+  num_conv: 2
+  se_factor: 2
+  ffn_expand: 2
+  res_scale: 1.0
+  dropout_rate: 0
+  use_mbconv: True
+  block_num: 8
+  with_idt: False
+  act_type: 'gelu'
+  block_act_num: 3
+  use_bn: False
+  train_act: False
+  deploy: False
+
+
+# path
+path:
+  pretrain_network_g: ~
+  strict_load_g: false
+  resume_state: ~
+
+# training settings
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 2e-4
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [200000]
+    gamma: 0.5
+
+  total_iter: 300000
+  warmup_iter: -1  # no warm up
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+  ssim_opt:
+    type: SSIMLoss
+    loss_weight: 0.1
+    crop_border: 0
+    test_y_channel: False
+    reduction: mean
+# validation settings
+val:
+  val_freq: !!float 5e3
+  save_img: false
+
+  metrics:
+    psnr: # metric name, can be arbitrary
+      type: calculate_psnr
+      crop_border: 4
+      test_y_channel: true
+    ssim:
+      type: calculate_ssim
+      crop_border: 4
+      test_y_channel: true
+
+# logging settings
+logger:
+  print_freq: 1000
+  save_checkpoint_freq: !!float 1e4
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500
